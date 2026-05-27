@@ -49,7 +49,7 @@ import { motion, AnimatePresence } from 'motion/react';
 // Importaciones de los módulos SDK de Firebase Web
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, doc, setDoc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, updateDoc, onSnapshot, getDoc, collection, getDocs } from 'firebase/firestore';
 
 // Declare globals for platform variables
 declare global {
@@ -111,6 +111,8 @@ const DEFAULT_COURSE_DATA = [
         id: "q1_1",
         type: "multiple",
         difficulty: 1,
+        cognitiveLevel: "conocimiento",
+        category: "Ritos",
         question: "¿Qué representaba el Velo del Templo que separaba el Lugar Santo del Lugar Santísimo según Hebreos?",
         options: [
           "El cuerpo y la carne de Jesucristo, rasgada para abrirnos un camino nuevo y vivo.",
@@ -125,6 +127,8 @@ const DEFAULT_COURSE_DATA = [
         id: "q1_2",
         type: "translate",
         difficulty: 2,
+        cognitiveLevel: "comprensión",
+        category: "Ritos",
         question: "Traduce al orden correcto la revelación:",
         textToTranslate: "La ley es una sombra de los bienes venideros.",
         wordBank: ["sombra", "ley", "La", "bienes", "venideros", "es", "una", "de", "los"],
@@ -135,6 +139,8 @@ const DEFAULT_COURSE_DATA = [
         id: "q1_3",
         type: "dictation",
         difficulty: 3,
+        cognitiveLevel: "aplicación",
+        category: "Ritos",
         question: "Escribe la frase que escuchas:",
         textToDictate: "La sangre de toros no quita los pecados",
         correctAnswer: "La sangre de toros no quita los pecados",
@@ -144,6 +150,8 @@ const DEFAULT_COURSE_DATA = [
         id: "q1_4",
         type: "fill_blanks",
         difficulty: 4,
+        cognitiveLevel: "análisis",
+        category: "Ritos",
         question: "Completa el versículo:",
         textBefore: "Pero estando ya presente Cristo, sumo sacerdote de los ",
         textAfter: " venideros.",
@@ -162,6 +170,8 @@ const DEFAULT_COURSE_DATA = [
         id: "q2_1",
         type: "boolean",
         difficulty: 2,
+        cognitiveLevel: "comprensión",
+        category: "Líderes",
         question: "¿La Roca golpeada en el desierto, de la cual brotó agua física, representa a Cristo siendo herido para darnos agua de vida espiritual?",
         options: ["Verdadero", "Falso"],
         correctIndex: 0,
@@ -171,6 +181,8 @@ const DEFAULT_COURSE_DATA = [
         id: "q2_2",
         type: "multiple",
         difficulty: 5,
+        cognitiveLevel: "análisis",
+        category: "Líderes",
         question: "La serpiente de bronce levantada por Moisés en el asta otorgaba vida física a quien la miraba. ¿A quién prefiguraba?",
         options: [
           "Al diablo siendo derrotado públicamente en el cielo.",
@@ -244,6 +256,152 @@ const playSound = (type: string) => {
   }
 };
 
+const MemberDashboard = () => {
+  const [dbMembers, setDbMembers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingMember, setEditingMember] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (!db) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const usersList: any[] = [];
+        querySnapshot.forEach((doc) => {
+          usersList.push({ id: doc.id, ...doc.data() });
+        });
+        setDbMembers(usersList);
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const handleSaveMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember || !db) return;
+    try {
+      const userRef = doc(db, 'users', editingMember.id);
+      await setDoc(userRef, {
+        name: editingMember.name || '',
+        whatsapp: editingMember.whatsapp || '',
+        city: editingMember.city || '',
+        country: editingMember.country || ''
+      }, { merge: true });
+      
+      setDbMembers(prev => prev.map(m => m.id === editingMember.id ? editingMember : m));
+      setEditingMember(null);
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="bg-[#161F30] border-2 border-[#25354F] p-5 rounded-2xl shadow-md relative">
+      <h3 className="font-extrabold text-xs uppercase text-slate-400 tracking-wider mb-4 flex items-center gap-2">
+        <Users className="h-4 w-4" /> Base de Datos de Miembros (Firestore)
+      </h3>
+      {loading ? (
+        <p className="text-slate-400 text-xs">Cargando usuarios...</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-[#25354F] text-slate-400">
+                <th className="py-2">Nombre</th>
+                <th className="py-2">WhatsApp</th>
+                <th className="py-2">Ciudad</th>
+                <th className="py-2">País</th>
+                <th className="py-2">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dbMembers.map(m => (
+                <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 text-slate-200">
+                  <td className="py-2.5 font-bold">{m.name || 'Sin nombre'}</td>
+                  <td className="py-2.5">{m.whatsapp || 'No registrado'}</td>
+                  <td className="py-2.5">{m.city || 'No registrada'}</td>
+                  <td className="py-2.5">{m.country || 'No registrado'}</td>
+                  <td className="py-2.5">
+                    <button 
+                      onClick={() => setEditingMember(m)}
+                      className="text-[#1CB0F6] hover:underline font-bold"
+                    >
+                      Editar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {dbMembers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-4 text-center text-slate-500">No hay usuarios en la colección.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal Edición */}
+      {editingMember && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <form onSubmit={handleSaveMember} className="bg-[#1C2E4A] border-2 border-[#25354F] rounded-2xl p-6 w-full max-w-sm space-y-4">
+            <h4 className="font-black text-white text-lg">Editar Miembro</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase">Nombre</label>
+                <input 
+                  type="text" 
+                  value={editingMember.name || ''} 
+                  onChange={e => setEditingMember({...editingMember, name: e.target.value})}
+                  className="w-full p-2 bg-[#0B0F19] rounded-lg text-white text-xs border border-slate-700"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase">WhatsApp</label>
+                <input 
+                  type="text" 
+                  value={editingMember.whatsapp || ''} 
+                  onChange={e => setEditingMember({...editingMember, whatsapp: e.target.value})}
+                  className="w-full p-2 bg-[#0B0F19] rounded-lg text-white text-xs border border-slate-700"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase">Ciudad</label>
+                <input 
+                  type="text" 
+                  value={editingMember.city || ''} 
+                  onChange={e => setEditingMember({...editingMember, city: e.target.value})}
+                  className="w-full p-2 bg-[#0B0F19] rounded-lg text-white text-xs border border-slate-700"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase">País</label>
+                <input 
+                  type="text" 
+                  value={editingMember.country || ''} 
+                  onChange={e => setEditingMember({...editingMember, country: e.target.value})}
+                  className="w-full p-2 bg-[#0B0F19] rounded-lg text-white text-xs border border-slate-700"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button type="button" onClick={() => setEditingMember(null)} className="flex-1 py-2 bg-slate-700 text-white rounded-xl text-xs font-bold">Cancelar</button>
+              <button type="submit" className="flex-1 py-2 bg-[#58CC02] text-white rounded-xl text-xs font-bold border-b-4 border-[#46A302]">Guardar</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   // Estado General del Sistema de Juego
   // 'cover' | 'learn' | 'solo_trivia' | 'tournament' | 'tournament_active' | 'lesson_active' | 'glossary' | 'cms'
@@ -264,6 +422,9 @@ export default function App() {
       return DEFAULT_COURSE_DATA;
     }
   });
+
+  const [tournamentsData, setTournamentsData] = useState<any[]>([]);
+  const [lessonTimer, setLessonTimer] = useState<number>(30);
 
   // Estados de la lección del itinerario
   const [activeLessonUnit, setActiveLessonUnit] = useState<any>(null);
@@ -750,14 +911,64 @@ export default function App() {
     }
   };
 
+  // Resetear estados al salir de cualquier modo de juego
   const exitLobby = () => {
-    if (simulatedCompetitorsTimer.current) clearInterval(simulatedCompetitorsTimer.current);
-    setCurrentLobbyId(null);
-    setLobbyData(null);
     setGameState('cover');
-    setIsLobbyHost(false);
-    setIsSimulatedLobby(false);
+    setLobbyData({});
+    setLessonQuestionIdx(0);
+    setSoloQuestionIdx(0);
+    setActiveLessonUnit(null);
+    setScore(0);
+    setXp(0);
+    setSoloScorePlayer(0);
+    setSoloScoreAI(0);
+    setQuestionAnswered(false);
+    setSelectedOption(null);
+    setSoloTimer(60);
+    setLessonTimer(30);
+    if (soloTimerInterval.current) clearInterval(soloTimerInterval.current);
+    if (simulatedCompetitorsTimer.current) clearInterval(simulatedCompetitorsTimer.current);
+    triggerSound('blip');
   };
+
+  const startLesson = (unit: any) => {
+    setActiveLessonUnit(unit);
+    setGameState('lesson_active');
+    setLessonQuestionIdx(0);
+    setHearts(5);
+    setLessonTimer(30);
+    resetQuestionState();
+    setTeoMood("thinking");
+    setTeoMessage("El Antiguo Testamento era el cuarto de maquetas. Cristo es el edificio completo.");
+    triggerSound('level-up');
+  };
+
+  const handleTimeUp = () => {
+    setHearts((prev) => Math.max(0, prev - 1));
+    triggerSound('incorrect');
+    setTeoMood("sad");
+    setTeoMessage("¡Se acabó el tiempo! Recuerda responder más rápido.");
+    setTimeout(() => {
+      handleContinue();
+    }, 1500);
+  };
+
+  // Temporizador de lesson_active
+  useEffect(() => {
+    let interval: any;
+    if (gameState === 'lesson_active' && !questionAnswered) {
+      if (lessonTimer === 0) {
+        setQuestionAnswered(true);
+        handleTimeUp();
+      } else {
+        interval = setInterval(() => {
+          setLessonTimer((prev) => prev - 1);
+        }, 1000);
+      }
+    }
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState, questionAnswered, lessonTimer]);
 
   // Función refillHearts corregida para su correcta inicialización y renderizado
   const refillHearts = () => {
@@ -835,6 +1046,13 @@ export default function App() {
     triggerSound('level-up');
   };
 
+  const updateQuestion = (uIdx: number, qIdx: number, field: string, value: any) => {
+    const updated = [...courseData];
+    updated[uIdx].questions[qIdx] = { ...updated[uIdx].questions[qIdx], [field]: value };
+    setCourseData(updated);
+    localStorage.setItem('grace_custom_curriculum', JSON.stringify(updated));
+  };
+
   const handleUpdateUnitMeta = (unitId: string, field: string, value: string) => {
     const updated = courseData.map(u => {
       if (u.id === unitId) {
@@ -867,7 +1085,10 @@ export default function App() {
           question: "¿Nueva Pregunta Teológica?",
           options: ["Opción A", "Opción B", "Opción C", "Opción D"],
           correctIndex: 0,
-          explanation: "Justificación exegética."
+          explanation: "Justificación exegética.",
+          difficulty: 1,
+          cognitiveLevel: 'conocimiento',
+          category: 'Ritos'
         };
         setSelectedCmsQuestionId(newQId);
         return { ...u, questions: [...(u.questions || []), newQ] };
@@ -1127,7 +1348,7 @@ export default function App() {
   const TOURNAMENT_QUESTIONS = getFlatQuestions();
 
   return (
-    <div id="camino_de_gracia_redesign_root" className="min-h-screen bg-[#0B0F19] text-[#E2E8F0] font-sans flex flex-col md:flex-row pb-24 md:pb-0 relative overflow-x-hidden">
+    <div id="camino_de_gracia_redesign_root" className="min-h-screen bg-[#0B0F19] text-[#E2E8F0] font-sans flex flex-col md:flex-row pb-24 md:pb-0 relative overflow-hidden">
       
       {/* ALERTA TOAST FLOTANTE ANIMADA */}
       <AnimatePresence>
@@ -1664,7 +1885,22 @@ export default function App() {
                     style={{ width: `${(lessonQuestionIdx / activeLessonUnit.questions.length) * 100}%` }}
                   />
                 </div>
-                <span className="text-xs text-slate-400 font-bold">{lessonQuestionIdx + 1}/{activeLessonUnit.questions.length}</span>
+                <div className="flex items-center justify-between mt-2 md:mt-0">
+                  <div className="flex items-center space-x-1.5 bg-[#FF4B4B]/10 px-2.5 py-1 rounded-lg">
+                    <Heart className="h-4 w-4 md:h-5 md:w-5 text-[#FF4B4B] fill-[#FF4B4B]" />
+                    <span className="font-black text-[#FF4B4B] text-sm md:text-base">{hearts}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* BARRA DE TIEMPO (COUNTDOWN ENGINE) */}
+              <div className="w-full h-2 bg-[#1E293B] rounded-full overflow-hidden mb-4">
+                <motion.div 
+                  className="h-full bg-[#1CB0F6]"
+                  initial={{ width: '100%' }}
+                  animate={{ width: `${(lessonTimer / 30) * 100}%` }}
+                  transition={{ duration: 0.5 }}
+                />
               </div>
 
               <h2 className="text-base md:text-xl font-black text-white leading-snug">
@@ -2014,59 +2250,83 @@ export default function App() {
               </div>
 
               {/* Members Table */}
-              <div className="bg-[#161F30] border-2 border-[#25354F] p-5 rounded-2xl shadow-md">
-                <h3 className="font-extrabold text-xs uppercase text-slate-400 tracking-wider mb-4 flex items-center gap-2">
-                  <Users className="h-4 w-4" /> Miembros y Progreso
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-[#25354F] text-slate-400">
-                        <th className="py-2">Nombre</th>
-                        <th className="py-2">Rol</th>
-                        <th className="py-2">XP</th>
-                        <th className="py-2">Progreso</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {members.map(m => (
-                        <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 text-slate-200">
-                          <td className="py-2.5 font-bold">{m.name}</td>
-                          <td className="py-2.5">{m.role}</td>
-                          <td className="py-2.5 font-black text-[#58CC02]">{m.xp} XP</td>
-                          <td className="py-2.5">{m.progress}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <MemberDashboard />
 
               {/* Selector de Pestañas del CMS */}
-              <div className="flex bg-[#0B0F19] p-1.5 rounded-2xl border-2 border-[#25354F] max-w-sm">
+              <div className="flex bg-[#0B0F19] p-1.5 rounded-2xl border-2 border-[#25354F] max-w-2xl overflow-x-auto">
                 <button
                   id="tab_cms_visual"
                   onClick={() => setCmsTab('visual')}
-                  className={`flex-1 py-2 text-center text-xs font-black rounded-xl transition ${
+                  className={`flex-1 py-2 px-2 text-center text-xs font-black rounded-xl transition ${
                     cmsTab === 'visual'
                       ? 'bg-[#1C2E4A] text-[#1CB0F6] border border-[#1CB0F6]/25'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Editor Visual (Formulario)
+                  Editor Visual
                 </button>
                 <button
                   id="tab_cms_raw_json"
                   onClick={() => setCmsTab('raw_json')}
-                  className={`flex-1 py-2 text-center text-xs font-black rounded-xl transition ${
+                  className={`flex-1 py-2 px-2 text-center text-xs font-black rounded-xl transition ${
                     cmsTab === 'raw_json'
-                      ? 'bg-[#1C2E4A] text-[#1CB0F6] border border-[#1CB0F6]/25'
+                      ? 'bg-[#3A1D42] text-[#CE82FF] border border-[#CE82FF]/25'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Código Raw JSON
+                  Editor JSON (Crudo)
+                </button>
+                <button
+                  id="tab_cms_torneos"
+                  onClick={() => setCmsTab('torneos')}
+                  className={`flex-1 py-2 px-2 text-center text-xs font-black rounded-xl transition ${
+                    cmsTab === 'torneos'
+                      ? 'bg-[#33140C] text-[#FF4B4B] border border-[#FF4B4B]/25'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Gestión de Torneos
                 </button>
               </div>
+
+              {/* PESTAÑA 3: GESTIÓN DE TORNEOS */}
+              {cmsTab === 'torneos' && (
+                <motion.div
+                  key="cms_torneos_view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="bg-[#1C2E4A] border-2 border-[#183D6D] p-5 rounded-2xl">
+                    <h3 className="font-black text-white text-lg flex items-center gap-2 mb-4">
+                      <Trophy className="h-5 w-5 text-[#FFC000]" /> Gestión de Torneos
+                    </h3>
+                    <div className="space-y-4">
+                      {tournamentsData.map((t, idx) => (
+                        <div key={idx} className="bg-[#0B0F19] p-4 rounded-xl border border-[#25354F]">
+                          <div className="font-bold text-white">{t.name}</div>
+                          <div className="text-xs text-slate-400">Duración: {t.duration}s | Unidades: {t.units.join(', ')}</div>
+                        </div>
+                      ))}
+                      {tournamentsData.length === 0 && (
+                        <p className="text-xs text-slate-400">No hay torneos creados aún.</p>
+                      )}
+                      
+                      <div className="border-t border-[#25354F] pt-4 mt-4">
+                        <h4 className="font-bold text-sm text-slate-300 mb-2">Crear Nuevo Torneo</h4>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <input type="text" placeholder="Nombre del Torneo" className="p-2 bg-[#161F30] rounded-lg text-xs text-white border border-[#25354F]" />
+                          <input type="number" placeholder="Duración (segundos)" className="p-2 bg-[#161F30] rounded-lg text-xs text-white border border-[#25354F]" />
+                        </div>
+                        <button className="mt-3 px-4 py-2 bg-[#FFC000] text-[#0B0F19] font-black text-xs rounded-xl shadow border-b-4 border-[#CC9900]">
+                          Añadir Torneo
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
 
               {/* PESTAÑA 1: EDITOR VISUAL */}
               {cmsTab === 'visual' && (
@@ -2132,6 +2392,7 @@ export default function App() {
                       (() => {
                         const activeUnit = courseData.find(u => u.id === selectedCmsUnitId);
                         if (!activeUnit) return null;
+                        const uIdx = courseData.findIndex(u => u.id === selectedCmsUnitId);
 
                         return (
                           <div className="space-y-6 bg-[#161F30] border-2 border-[#25354F] p-5 rounded-2xl">
@@ -2222,7 +2483,7 @@ export default function App() {
                                             }}
                                             className="text-slate-400 hover:text-[#FF4B4B] p-1"
                                           >
-                                            <Trash2 className="h-3 w-3" />
+                                            <Trash2 className="h-3.5 w-3.5" />
                                           </button>
                                         </div>
                                       </div>
@@ -2231,7 +2492,7 @@ export default function App() {
                                       {isExpanded && (
                                         <div className="p-4 border-t border-[#25354F] space-y-4 bg-[#161F30]/40">
                                           
-                                          {/* Tipo y Enunciado */}
+                                          {/* Tipo, Dificultad y Enunciado */}
                                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                             <div className="md:col-span-1 space-y-1">
                                               <label className="block text-[9px] font-black uppercase text-slate-400">Tipo de Pregunta</label>
@@ -2242,9 +2503,48 @@ export default function App() {
                                               >
                                                 <option value="multiple">Opción Múltiple</option>
                                                 <option value="boolean">Verdadero / Falso</option>
+                                                <option value="fill_blanks">Rellenar Huecos</option>
+                                                <option value="translate">Traducción</option>
+                                                <option value="dictation">Dictado</option>
                                               </select>
                                             </div>
-                                            <div className="md:col-span-3 space-y-1">
+                                            <div className="md:col-span-1 space-y-1">
+                                              <label className="block text-[9px] font-black uppercase text-slate-400">Dificultad</label>
+                                              <select
+                                                value={q.difficulty || 1}
+                                                onChange={(e) => handleUpdateQuestion(activeUnit.id, q.id, 'difficulty', parseInt(e.target.value))}
+                                                className="w-full p-2 rounded-lg bg-[#0B0F19] border border-slate-700 text-white font-bold text-xs focus:outline-none"
+                                              >
+                                                {[1,2,3,4,5].map(d => <option key={d} value={d}>Nivel {d}</option>)}
+                                              </select>
+                                            </div>
+                                            <div className="md:col-span-2 space-y-1">
+                                              <label className="block text-[9px] font-black uppercase text-slate-400">Nivel Cognitivo y Categoría</label>
+                                              <div className="flex gap-2">
+                                                <select
+                                                  value={q.cognitiveLevel || 'conocimiento'}
+                                                  onChange={(e) => handleUpdateQuestion(activeUnit.id, q.id, 'cognitiveLevel', e.target.value)}
+                                                  className="flex-1 p-2 rounded-lg bg-[#0B0F19] border border-slate-700 text-white font-bold text-xs focus:outline-none"
+                                                >
+                                                  <option value="conocimiento">Conocimiento</option>
+                                                  <option value="comprensión">Comprensión</option>
+                                                  <option value="aplicación">Aplicación</option>
+                                                  <option value="análisis">Análisis</option>
+                                                </select>
+                                                <select
+                                                  value={q.category || 'Ritos'}
+                                                  onChange={(e) => handleUpdateQuestion(activeUnit.id, q.id, 'category', e.target.value)}
+                                                  className="flex-1 p-2 rounded-lg bg-[#0B0F19] border border-slate-700 text-white font-bold text-xs focus:outline-none"
+                                                >
+                                                  <option value="Ritos">Ritos</option>
+                                                  <option value="Líderes">Líderes</option>
+                                                  <option value="Pactos">Pactos</option>
+                                                  <option value="Geografía">Geografía</option>
+                                                  <option value="Símbolos">Símbolos</option>
+                                                </select>
+                                              </div>
+                                            </div>
+                                            <div className="md:col-span-4 space-y-1 mt-2">
                                               <label className="block text-[9px] font-black uppercase text-slate-400">Pregunta o Enunciado</label>
                                               <input 
                                                 type="text"
@@ -2373,11 +2673,9 @@ export default function App() {
                   </div>
                 </div>
               )}
-
             </motion.div>
           )}
         </AnimatePresence>
-
         </div>
       </main>
 
