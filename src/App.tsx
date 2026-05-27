@@ -110,6 +110,7 @@ const DEFAULT_COURSE_DATA = [
       {
         id: "q1_1",
         type: "multiple",
+        difficulty: 1,
         question: "¿Qué representaba el Velo del Templo que separaba el Lugar Santo del Lugar Santísimo según Hebreos?",
         options: [
           "El cuerpo y la carne de Jesucristo, rasgada para abrirnos un camino nuevo y vivo.",
@@ -122,24 +123,32 @@ const DEFAULT_COURSE_DATA = [
       },
       {
         id: "q1_2",
-        type: "multiple",
-        question: "La ley del Antiguo Pacto contenía la 'sombra' de los bienes venideros. ¿Qué significa esto teológicamente?",
-        options: [
-          "Que el Antiguo Testamento era una doctrina oscura y prohibida.",
-          "Que la ley era un bosquejo preliminar y didáctico que apuntaba a la realidad perfecta en Cristo.",
-          "Que los ritos de Moisés tenían validez eterna para la salvación de la conciencia.",
-          "Que no tiene ninguna relación con las promesas de la Gracia divina."
-        ],
-        correctIndex: 1,
-        explanation: "Hebreos 10:1 enseña que la ley, teniendo la sombra de los bienes venideros, no la imagen misma de las cosas, no puede hacer perfectos a los que se acercan."
+        type: "translate",
+        difficulty: 2,
+        question: "Traduce al orden correcto la revelación:",
+        textToTranslate: "La ley es una sombra de los bienes venideros.",
+        wordBank: ["sombra", "ley", "La", "bienes", "venideros", "es", "una", "de", "los"],
+        correctAnswer: ["La", "ley", "es", "una", "sombra", "de", "los", "bienes", "venideros"],
+        explanation: "Hebreos 10:1 enseña que la ley, teniendo la sombra de los bienes venideros..."
       },
       {
         id: "q1_3",
-        type: "boolean",
-        question: "¿El sacerdocio de Aarón y los sacrificios de animales bajo la Ley podían quitar permanentemente los pecados?",
-        options: ["Verdadero", "Falso"],
-        correctIndex: 1, // Falso
-        explanation: "Hebreos 10:4 aclara que la sangre de los toros y de los machos cabríos no puede quitar los pecados; solo eran una sombra temporal."
+        type: "dictation",
+        difficulty: 3,
+        question: "Escribe la frase que escuchas:",
+        textToDictate: "La sangre de toros no quita los pecados",
+        correctAnswer: "La sangre de toros no quita los pecados",
+        explanation: "Hebreos 10:4 aclara que la sangre de los toros..."
+      },
+      {
+        id: "q1_4",
+        type: "fill_blanks",
+        difficulty: 4,
+        question: "Completa el versículo:",
+        textBefore: "Pero estando ya presente Cristo, sumo sacerdote de los ",
+        textAfter: " venideros.",
+        correctAnswer: "bienes",
+        explanation: "Hebreos 9:11."
       }
     ]
   },
@@ -152,14 +161,16 @@ const DEFAULT_COURSE_DATA = [
       {
         id: "q2_1",
         type: "boolean",
+        difficulty: 2,
         question: "¿La Roca golpeada en el desierto, de la cual brotó agua física, representa a Cristo siendo herido para darnos agua de vida espiritual?",
         options: ["Verdadero", "Falso"],
-        correctIndex: 0, // Verdadero
+        correctIndex: 0,
         explanation: "1 Corintios 10:4 dice explícitamente: 'y bebían de la roca espiritual que los seguía, y la roca era Cristo'."
       },
       {
         id: "q2_2",
         type: "multiple",
+        difficulty: 5,
         question: "La serpiente de bronce levantada por Moisés en el asta otorgaba vida física a quien la miraba. ¿A quién prefiguraba?",
         options: [
           "Al diablo siendo derrotado públicamente en el cielo.",
@@ -168,7 +179,7 @@ const DEFAULT_COURSE_DATA = [
           "Un amuleto sagrado que se guardaba dentro del Arca."
         ],
         correctIndex: 1,
-        explanation: "En Juan 3:14-15, Jesús mismo hace la conexión: 'Y como Moisés levantó la serpiente en el desierto, así es necesario que el Hijo del Hombre sea levantado'."
+        explanation: "En Juan 3:14-15, Jesús mismo hace la conexión..."
       }
     ]
   }
@@ -299,6 +310,19 @@ export default function App() {
   const [selectedCmsUnitId, setSelectedCmsUnitId] = useState<string | null>(null);
   const [selectedCmsQuestionId, setSelectedCmsQuestionId] = useState<string | null>(null);
 
+  // --- NEW STATES FOR ADAPTIVE ENGINE, CMS AUTH AND MEMBERS ---
+  const [cmsAuth, setCmsAuth] = useState<boolean>(false);
+  const [cmsUsername, setCmsUsername] = useState<string>('');
+  const [cmsPassword, setCmsPassword] = useState<string>('');
+  const [translateSelected, setTranslateSelected] = useState<string[]>([]);
+  const [dictationInput, setDictationInput] = useState<string>('');
+  const [fillBlankInput, setFillBlankInput] = useState<string>('');
+  const [currentDifficulty, setCurrentDifficulty] = useState<number>(1);
+  const [members, setMembers] = useState<any[]>([
+    { id: 1, name: 'Hermano Carlos', role: 'Estudiante', xp: 450, progress: '40%' },
+    { id: 2, name: 'Hermana Maria', role: 'Catequista', xp: 1200, progress: '100%' }
+  ]);
+
   const soloTimerInterval = useRef<any>(null);
   const simulatedCompetitorsTimer = useRef<any>(null);
 
@@ -310,6 +334,9 @@ export default function App() {
     setSelectedOption(null);
     setQuestionAnswered(false);
     setIsCorrect(false);
+    setTranslateSelected([]);
+    setDictationInput('');
+    setFillBlankInput('');
   };
 
   const showToast = (msg: string, isError = false) => {
@@ -432,6 +459,20 @@ export default function App() {
     return list.length > 0 ? list : DEFAULT_COURSE_DATA[0].questions;
   };
 
+  const getNextQuestion = (targetDifficulty: number, availableQs: any[]) => {
+    if (!availableQs || availableQs.length === 0) return null;
+    let nearest = availableQs[0];
+    let minDiff = Infinity;
+    for (const q of availableQs) {
+      const d = Math.abs((q.difficulty || 1) - targetDifficulty);
+      if (d < minDiff) {
+        minDiff = d;
+        nearest = q;
+      }
+    }
+    return nearest;
+  };
+
   const startSoloTrivia = () => {
     setGameState('solo_trivia');
     setSoloQuestionIdx(0);
@@ -454,23 +495,38 @@ export default function App() {
     const question = currentQuestionsList[idx] || currentQuestionsList[0];
     
     let isAnswerCorrect = false;
-    if (!timeOut && selectedIdx === question.correctIndex) {
-      isAnswerCorrect = true;
+    if (!timeOut) {
+      if (question.type === 'multiple' || question.type === 'boolean') {
+        isAnswerCorrect = selectedIdx === question.correctIndex;
+      } else if (question.type === 'translate') {
+        isAnswerCorrect = JSON.stringify(translateSelected) === JSON.stringify(question.correctAnswer);
+      } else if (question.type === 'dictation') {
+        isAnswerCorrect = dictationInput.trim().toLowerCase() === question.correctAnswer?.toLowerCase();
+      } else if (question.type === 'fill_blanks') {
+        isAnswerCorrect = fillBlankInput.trim().toLowerCase() === question.correctAnswer?.toLowerCase();
+      }
     }
 
     setIsCorrect(isAnswerCorrect);
     setQuestionAnswered(true);
     setSelectedOption(selectedIdx);
 
+    const qDiff = question.difficulty || 1;
+    const baseXP = 50;
+    const earnedXP = baseXP * qDiff;
+
     if (isAnswerCorrect) {
       triggerSound('correct');
       setTeoMood("excited");
-      setTeoMessage("¡Increíble! Distingues perfectamente las realidades de la Gracia.");
+      setTeoMessage(`¡Increíble! Distingues perfectamente las realidades de la Gracia. (Nivel ${qDiff}: +${earnedXP} XP)`);
       
       if (gameState === 'solo_trivia') {
         const speedBonus = Math.floor(soloTimer * 2);
-        setSoloScorePlayer((prev) => prev + 50 + speedBonus);
+        setSoloScorePlayer((prev) => prev + earnedXP + speedBonus);
+      } else {
+        setXp(prev => prev + earnedXP);
       }
+      setCurrentDifficulty(prev => Math.min(5, prev + 1));
     } else {
       triggerSound('incorrect');
       setTeoMood("sad");
@@ -479,6 +535,7 @@ export default function App() {
       if (gameState !== 'solo_trivia') {
         setHearts((prev) => Math.max(0, prev - 1));
       }
+      setCurrentDifficulty(prev => Math.max(1, prev - 1));
     }
 
     if (gameState === 'solo_trivia') {
@@ -486,7 +543,7 @@ export default function App() {
         const aiCorrect = Math.random() > 0.35; 
         const aiSpeedBonus = Math.floor(Math.random() * 20);
         if (aiCorrect) {
-          setSoloScoreAI((prev) => prev + 50 + aiSpeedBonus);
+          setSoloScoreAI((prev) => prev + earnedXP + aiSpeedBonus);
         }
       }, 1200);
     }
@@ -497,10 +554,16 @@ export default function App() {
     const currentIdx = gameState === 'solo_trivia' ? soloQuestionIdx : lessonQuestionIdx;
 
     if (currentIdx + 1 < currentQuestionsList.length) {
+      let nextIdx = currentIdx + 1;
+      const nextQ = getNextQuestion(currentDifficulty, currentQuestionsList.slice(currentIdx + 1));
+      if (nextQ) {
+        nextIdx = currentQuestionsList.findIndex((q: any) => q.id === nextQ.id);
+      }
+
       if (gameState === 'solo_trivia') {
-        setSoloQuestionIdx((prev) => prev + 1);
+        setSoloQuestionIdx(nextIdx);
       } else {
-        setLessonQuestionIdx((prev) => prev + 1);
+        setLessonQuestionIdx(nextIdx);
       }
       resetQuestionState();
       setTeoMood("thinking");
@@ -936,6 +999,130 @@ export default function App() {
     );
   };
 
+  const renderAdaptiveQuestion = (question: any) => {
+    if (!question) return null;
+
+    if (question.type === 'multiple' || question.type === 'boolean') {
+      return (
+        <div className={`grid gap-3 ${question.type === 'boolean' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {question.options?.map((option: string, idx: number) => (
+            <button
+              key={idx}
+              disabled={questionAnswered}
+              onClick={() => evaluateAnswer(idx)}
+              className={`w-full text-left p-3.5 rounded-xl border-2 font-bold transition-all border-b-4 flex items-center justify-between group active:translate-y-[2px] ${
+                selectedOption === idx 
+                  ? 'bg-[#1C2E4A] border-[#1CB0F6] text-white border-b-[#1479AB]' 
+                  : 'bg-[#1E293B] border-slate-700 text-slate-300 hover:bg-slate-800 border-b-slate-950'
+              } ${
+                questionAnswered && idx === question.correctIndex
+                  ? 'bg-[#1F3124] border-[#58CC02] text-white border-b-[#3B8902]'
+                  : ''
+              }`}
+            >
+              <span className="text-xs md:text-sm">{option}</span>
+              <span className="text-[10px] font-black text-slate-500">{String.fromCharCode(65 + idx)}</span>
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    if (question.type === 'translate') {
+      return (
+        <div className="space-y-4">
+          <div className="min-h-[60px] p-4 border-b-2 border-dashed border-slate-700 flex flex-wrap gap-2 items-center">
+            {translateSelected.map((word, idx) => (
+              <button
+                key={idx}
+                disabled={questionAnswered}
+                onClick={() => setTranslateSelected(prev => prev.filter((_, i) => i !== idx))}
+                className="px-3 py-1.5 bg-[#1C2E4A] border-2 border-[#1CB0F6] border-b-4 rounded-xl text-white font-bold text-sm active:translate-y-[2px]"
+              >
+                {word}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 justify-center pt-2">
+            {question.wordBank?.filter((w: string) => !translateSelected.includes(w)).map((word: string, idx: number) => (
+              <button
+                key={idx}
+                disabled={questionAnswered}
+                onClick={() => setTranslateSelected(prev => [...prev, word])}
+                className="px-3 py-1.5 bg-[#1E293B] border-2 border-slate-700 border-b-4 rounded-xl text-slate-300 font-bold text-sm hover:bg-slate-800 active:translate-y-[2px]"
+              >
+                {word}
+              </button>
+            ))}
+          </div>
+          {!questionAnswered && (
+            <button onClick={() => evaluateAnswer(null)} className="w-full mt-4 py-3 bg-[#1CB0F6] text-white font-extrabold rounded-xl border-b-4 border-[#1479AB]">
+              Comprobar
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (question.type === 'dictation') {
+      return (
+        <div className="space-y-4">
+          <button
+            onClick={() => {
+              if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(question.textToDictate || '');
+                utterance.lang = 'es-ES';
+                window.speechSynthesis.speak(utterance);
+              }
+            }}
+            className="w-full py-6 bg-[#1C2C24] border-2 border-[#58CC02] rounded-2xl flex items-center justify-center gap-3 text-[#58CC02] hover:bg-[#1F3124] transition-colors"
+          >
+            <Volume2 className="h-8 w-8" />
+            <span className="font-black text-lg">Escuchar Audio</span>
+          </button>
+          <input
+            type="text"
+            disabled={questionAnswered}
+            value={dictationInput}
+            onChange={(e) => setDictationInput(e.target.value)}
+            placeholder="Escribe lo que escuchas..."
+            className="w-full p-4 rounded-xl bg-[#0B0F19] border-2 border-slate-700 text-white font-bold text-sm focus:outline-none focus:border-[#58CC02]"
+          />
+          {!questionAnswered && (
+            <button onClick={() => evaluateAnswer(null)} className="w-full py-3 bg-[#1CB0F6] text-white font-extrabold rounded-xl border-b-4 border-[#1479AB]">
+              Comprobar
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (question.type === 'fill_blanks') {
+      return (
+        <div className="space-y-4 text-center">
+          <div className="text-lg text-white font-bold leading-loose">
+            <span>{question.textBefore}</span>
+            <input
+              type="text"
+              disabled={questionAnswered}
+              value={fillBlankInput}
+              onChange={(e) => setFillBlankInput(e.target.value)}
+              className="mx-2 w-32 p-2 rounded-lg bg-[#0B0F19] border-b-2 border-slate-500 text-center text-[#FFC000] font-black focus:outline-none focus:border-[#FFC000]"
+            />
+            <span>{question.textAfter}</span>
+          </div>
+          {!questionAnswered && (
+            <button onClick={() => evaluateAnswer(null)} className="w-full mt-4 py-3 bg-[#1CB0F6] text-white font-extrabold rounded-xl border-b-4 border-[#1479AB]">
+              Comprobar
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   // Obtenemos una sola vez la lista aplanada para usarse de forma segura en las secciones dinámicas
   const TOURNAMENT_QUESTIONS = getFlatQuestions();
 
@@ -1317,28 +1504,8 @@ export default function App() {
                     {getFlatQuestions()[soloQuestionIdx]?.question}
                   </h2>
 
-                  {/* Renderizador de Respuestas adaptado a Boolean y Multiple */}
-                  <div className={`grid gap-3 ${getFlatQuestions()[soloQuestionIdx]?.type === 'boolean' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                    {getFlatQuestions()[soloQuestionIdx]?.options.map((option: string, idx: number) => (
-                      <button
-                        key={idx}
-                        disabled={questionAnswered}
-                        onClick={() => evaluateAnswer(idx)}
-                        className={`w-full text-left p-3.5 rounded-xl border-2 font-bold transition-all border-b-4 flex items-center justify-between group active:translate-y-[2px] ${
-                          selectedOption === idx 
-                            ? 'bg-[#1C2E4A] border-[#1CB0F6] text-white border-b-[#1479AB]' 
-                            : 'bg-[#1E293B] border-slate-700 text-slate-300 hover:bg-slate-800 border-b-slate-950'
-                        } ${
-                          questionAnswered && idx === getFlatQuestions()[soloQuestionIdx]?.correctIndex
-                            ? 'bg-[#1F3124] border-[#58CC02] text-white border-b-[#3B8902]'
-                            : ''
-                        }`}
-                      >
-                        <span className="text-xs md:text-sm">{option}</span>
-                        <span className="text-[10px] font-black text-slate-500">{String.fromCharCode(65 + idx)}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {/* Renderizador Adaptativo de Preguntas */}
+                  {renderAdaptiveQuestion(getFlatQuestions()[soloQuestionIdx])}
 
                   {/* Caja de validación */}
                   {questionAnswered && (
@@ -1505,27 +1672,7 @@ export default function App() {
               </h2>
 
               {/* Renderizador unificado responsivo */}
-              <div className={`grid gap-3 ${activeLessonUnit.questions[lessonQuestionIdx]?.type === 'boolean' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {activeLessonUnit.questions[lessonQuestionIdx]?.options.map((option: string, idx: number) => (
-                  <button
-                    key={idx}
-                    disabled={questionAnswered}
-                    onClick={() => evaluateAnswer(idx)}
-                    className={`w-full text-left p-3.5 rounded-xl border-2 font-bold transition-all border-b-4 flex items-center justify-between active:translate-y-[2px] ${
-                      selectedOption === idx 
-                        ? 'bg-[#1C2E4A] border-[#1CB0F6] text-white border-b-[#1479AB]' 
-                        : 'bg-[#1E293B] border-slate-700 text-slate-300 hover:bg-slate-800 border-b-slate-950'
-                    } ${
-                      questionAnswered && idx === activeLessonUnit.questions[lessonQuestionIdx]?.correctIndex
-                        ? 'bg-[#1F3124] border-[#58CC02] text-white border-b-[#3B8902]'
-                        : ''
-                    }`}
-                  >
-                    <span className="text-xs md:text-sm">{option}</span>
-                    <span className="text-[10px] font-bold text-slate-400">{String.fromCharCode(65 + idx)}</span>
-                  </button>
-                ))}
-              </div>
+              {renderAdaptiveQuestion(activeLessonUnit.questions[lessonQuestionIdx])}
 
               {questionAnswered && (
                 <div className="pt-4 border-t border-[#25354F] flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1649,33 +1796,7 @@ export default function App() {
                 <h2 className="text-sm md:text-base font-black text-white">{TOURNAMENT_QUESTIONS[lessonQuestionIdx]?.question}</h2>
 
                 {/* Grid adaptable de respuestas en torneo */}
-                <div className={`grid gap-3 ${TOURNAMENT_QUESTIONS[lessonQuestionIdx]?.type === 'boolean' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  {TOURNAMENT_QUESTIONS[lessonQuestionIdx]?.options.map((option: string, idx: number) => (
-                    <button
-                      key={idx}
-                      disabled={questionAnswered}
-                      onClick={() => evaluateAnswer(idx)}
-                      className={`p-3 text-left border-2 rounded-xl text-xs font-bold border-b-4 transition ${
-                        selectedOption === idx ? 'bg-[#1C2E4A] border-[#1CB0F6] border-b-[#1479AB]' : 'bg-white/5 border-slate-700 hover:bg-white/10'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="pt-2">
-                  {!questionAnswered ? (
-                    <button id="btn_submit_tournament_ans" onClick={() => evaluateAnswer(null, true)} className="w-full py-3 bg-[#8EBC94] text-white font-extrabold rounded-xl text-xs">
-                      Enviar Respuesta
-                    </button>
-                  ) : (
-                    <div className="bg-[#E9F2EA] p-3 rounded-xl flex items-center justify-between text-slate-800">
-                      <span className="text-[11px] font-bold">{TOURNAMENT_QUESTIONS[lessonQuestionIdx]?.explanation}</span>
-                      <button id="btn_tournament_continue" onClick={handleContinue} className="bg-slate-800 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold">Siguiente</button>
-                    </div>
-                  )}
-                </div>
+                {renderAdaptiveQuestion(TOURNAMENT_QUESTIONS[lessonQuestionIdx])}
               </div>
 
               {/* Marcador del Torneo */}
@@ -1726,7 +1847,55 @@ export default function App() {
           )}
 
             {/* ================= PANEL GESTOR DE CONTENIDOS (CMS AMIGABLE) ================= */}
-            {gameState === 'cms' && (
+            {gameState === 'cms' && !cmsAuth && (
+              <motion.div
+                key="cms_login"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                className="max-w-md mx-auto space-y-4 bg-[#161F30] border border-[#25354F] p-6 rounded-2xl shadow-xl mt-10"
+              >
+                <div className="text-center space-y-2">
+                  <Database className="h-10 w-10 text-[#FF4B4B] mx-auto" />
+                  <h2 className="text-xl font-black text-white">Acceso Administrativo</h2>
+                  <p className="text-xs text-slate-400">Ingresa tus credenciales para administrar el currículum.</p>
+                </div>
+                <div className="space-y-3 pt-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">Usuario</label>
+                    <input 
+                      type="text" 
+                      value={cmsUsername}
+                      onChange={(e) => setCmsUsername(e.target.value)}
+                      className="w-full p-3 rounded-xl bg-[#0B0F19] border border-slate-700 text-white font-bold text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">Contraseña</label>
+                    <input 
+                      type="password" 
+                      value={cmsPassword}
+                      onChange={(e) => setCmsPassword(e.target.value)}
+                      className="w-full p-3 rounded-xl bg-[#0B0F19] border border-slate-700 text-white font-bold text-xs focus:outline-none"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => {
+                      if (cmsUsername === 'Admin' && cmsPassword === 'soyeladmin-che') {
+                        setCmsAuth(true);
+                      } else {
+                        showToast("Credenciales incorrectas", true);
+                      }
+                    }}
+                    className="w-full py-3 bg-[#FF4B4B] hover:bg-red-600 text-white font-extrabold text-sm rounded-xl border-b-4 border-red-800 active:translate-y-[2px]"
+                  >
+                    INGRESAR AL CMS
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {gameState === 'cms' && cmsAuth && (
               <motion.div
                 key="cms"
                 initial={{ opacity: 0, y: 12 }}
@@ -1814,7 +1983,62 @@ export default function App() {
                         Aplicar Cambios JSON
                       </button>
                     )}
+                    <label className="cursor-pointer px-3 py-2 bg-slate-800 hover:bg-slate-700 text-[#FFC000] font-black text-xs rounded-xl flex items-center gap-1.5 transition-all border border-[#4D3F22]">
+                      <Upload className="h-3.5 w-3.5" />
+                      Carga a Granel
+                      <input 
+                        type="file" 
+                        accept=".json"
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              try {
+                                const parsed = JSON.parse(ev.target?.result as string);
+                                setCourseData(parsed);
+                                localStorage.setItem('grace_custom_curriculum', JSON.stringify(parsed));
+                                showToast("JSON cargado con éxito.");
+                              } catch(err) {
+                                showToast("Error parseando archivo", true);
+                              }
+                            };
+                            reader.readAsText(file);
+                          }
+                        }} 
+                      />
+                    </label>
                   </div>
+                </div>
+              </div>
+
+              {/* Members Table */}
+              <div className="bg-[#161F30] border-2 border-[#25354F] p-5 rounded-2xl shadow-md">
+                <h3 className="font-extrabold text-xs uppercase text-slate-400 tracking-wider mb-4 flex items-center gap-2">
+                  <Users className="h-4 w-4" /> Miembros y Progreso
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-[#25354F] text-slate-400">
+                        <th className="py-2">Nombre</th>
+                        <th className="py-2">Rol</th>
+                        <th className="py-2">XP</th>
+                        <th className="py-2">Progreso</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {members.map(m => (
+                        <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 text-slate-200">
+                          <td className="py-2.5 font-bold">{m.name}</td>
+                          <td className="py-2.5">{m.role}</td>
+                          <td className="py-2.5 font-black text-[#58CC02]">{m.xp} XP</td>
+                          <td className="py-2.5">{m.progress}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
