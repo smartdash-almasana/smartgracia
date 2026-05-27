@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "Lobby": {
+      "title": "Lobby",
+      "description": "Sala del torneo teológico multijugador",
+      "type": "object",
+      "properties": {
+        "lobbyId": {
+          "type": "string",
+          "description": "Código de la sala de 4 dígitos"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["waiting", "playing", "ended"],
+          "description": "Estado del lobby"
+        },
+        "hostId": {
+          "type": "string",
+          "description": "UID del usuario anfitrión"
+        },
+        "players": {
+          "type": "object",
+          "description": "Mapa de jugadores indexado por UID"
+        },
+        "createdAt": {
+          "type": "integer",
+          "description": "Timestamp de creación"
+        }
+      },
+      "required": ["lobbyId", "status", "hostId", "players", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/artifacts/{appId}/public/data/lobbies/{lobbyId}": {
+      "schema": "Lobby",
+      "description": "Colección de lobbies de torneos en tiempo real"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Camino de Gracia",
+  "description": "Trivia teológica interactiva que enseña tipología bíblica con el estilo de Duolingo y torneos en tiempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
